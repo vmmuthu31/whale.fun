@@ -2070,7 +2070,20 @@ const TradePage = () => {
                     />
                     {/* Currency selector on right */}
                     <div className="flex items-center gap-2 bg-[#2B2B2B] rounded-full px-3.5 py-1.5 text-sm">
-                      <span className="inline-flex h-5 w-5 rounded-full bg-blue-500" />
+                      <img
+                        src={
+                          tradeMode === "Buy"
+                            ? "/tokens/0G.png"
+                            : tokenData?.logoUrl ||
+                              "https://purple-voluntary-minnow-145.mypinata.cloud/ipfs/bafkreiadbzvwwngz3kvk5ut75gdzlbpklxokyacpysotogltergnkhx7um"
+                        }
+                        alt="arrow-down"
+                        className={`rounded-full ${
+                          tradeMode === "Buy" ? "h-6 w-full" : "h-4 w-4"
+                        }`}
+                        width={16}
+                        height={16}
+                      />
                       <span className="font-semibold">
                         {tradeMode === "Buy"
                           ? "0G"
@@ -2112,7 +2125,7 @@ const TradePage = () => {
                       Available{" "}
                       <span className="text-white/90 font-medium">
                         {tradeMode === "Buy"
-                          ? `${parseFloat(userBalance || "0").toFixed(4)} ETH`
+                          ? `${parseFloat(userBalance || "0").toFixed(4)} 0G`
                           : `${formatNumber(
                               parseFloat(formatEther(userTokenBalanceRaw))
                             )} ${tokenData?.symbol}`}
@@ -2128,7 +2141,7 @@ const TradePage = () => {
                           <div className="flex justify-between text-white/60">
                             <span>You&apos;re spending:</span>
                             <span className="text-white font-medium">
-                              {amount} ETH
+                              {amount} 0G
                             </span>
                           </div>
                           <div className="flex justify-between text-white/60">
