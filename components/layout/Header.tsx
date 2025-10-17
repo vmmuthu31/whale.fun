@@ -36,14 +36,16 @@ function Header() {
     <div className="flex items-center justify-between px-20 py-4 border-[#ebe3e8] bg-white border-b">
       <Link href="/" className="flex gap-x-2 cursor-pointer items-center">
         <Image
-          src="/logo.svg"
+          src="/logo.png"
           alt="Logo"
           width={56}
           height={28}
           className="h-7 w-14"
           priority
         />
-        <p className="font-satoshi text-3xl font-bold">Whale.fun</p>
+        <p className="font-satoshi text-[#A770FF] text-3xl font-bold">
+          Whale.fun
+        </p>
       </Link>
       <div className="flex gap-x-8 text-lg font-instrument font-medium items-center">
         {navItems.map((item) => (

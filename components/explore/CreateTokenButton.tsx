@@ -7,7 +7,7 @@ const CreateTokenButton = () => {
   return (
     <Link
       href="/launch"
-      className="flex items-center cursor-pointer gap-2 bg-black text-white px-6 py-3 rounded-lg font-medium hover:bg-gray-800 transition-colors focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
+      className="flex items-center cursor-pointer gap-2 bg-[#A770FF] text-white px-6 py-3 rounded-lg font-medium hover:bg-[#A770FF]/90 transition-colors focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
     >
       <svg
         className="h-5 w-5"
