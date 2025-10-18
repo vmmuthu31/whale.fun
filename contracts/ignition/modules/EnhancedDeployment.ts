@@ -82,7 +82,7 @@ const EnhancedWhaleDeployment = buildModule("EnhancedWhaleDeployment", (m) => {
   m.call(
     tokenFactory,
     "setLaunchFee",
-    [m.getParameter("launchFee", 1000000000000000n)],
+    [m.getParameter("launchFee", BigInt(1000000000000000))],
     {
       // 0.001 ETH (~$2)
       id: "SetLaunchFee",
