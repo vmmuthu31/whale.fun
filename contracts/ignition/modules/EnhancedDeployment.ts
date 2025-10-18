@@ -8,12 +8,13 @@ const EnhancedWhaleDeployment = buildModule("EnhancedWhaleDeployment", (m) => {
   // Configuration parameters for mainnet deployment
   const initialEthToUsdRate = m.getParameter(
     "initialEthToUsdRate",
-    2000n * 10n ** 18n
-  ); // $2000 per ETH
+    BigInt(2000) * BigInt(10) ** BigInt(18)
+  );
+
   const platformFeePercent = m.getParameter("platformFeePercent", 500); // 5%
   const defaultGraduationThreshold = m.getParameter(
     "defaultGraduationThreshold",
-    20n * 10n ** 18n
+    BigInt(20) * BigInt(10) ** BigInt(18)
   ); // $20 USD
 
   // Deploy WhaleToken first (platform governance token)
