@@ -22,16 +22,22 @@ contract TokenFactory is ReentrancyGuard, Ownable, ITokenFactory {
     mapping(address => address[]) public creatorTokens;
     mapping(address => bool) public override isValidToken;
     
-    // Enhanced factory parameters (testnet-cheap defaults)
-    // Set launch fee to 0 and allow very low initial liquidity for testnet UX
-    uint256 public launchFee = 0; // 0 ether
-    uint256 public minInitialLiquidity = 0.000000001 ether; // 1e-7 ether
-    uint256 public maxTokensPerCreator = 5;
+    // Revenue model - competitive fees for sustainability
+    uint256 public launchFee = 0.001 ether; // Small launch fee: ~$2 at current ETH prices
+    uint256 public minInitialLiquidity = 0; // No minimum liquidity required
+    uint256 public maxTokensPerCreator = 1000000; // Practically unlimited
     
-    // Platform statistics
+    // Platform commission structure
+    uint256 public platformCommissionRate = 100; // 1% on all trades (100 basis points)
+    uint256 public creatorCommissionRate = 300; // 3% to creator (300 basis points)
+    uint256 public constant MAX_TOTAL_COMMISSION = 500; // Max 5% total fees
+    
+    // Platform statistics & revenue tracking
     uint256 public totalTokensCreated;
     uint256 public totalVolumeTraded;
     uint256 public totalFeesCollected;
+    uint256 public platformRevenue; // Our commission earnings
+    uint256 public totalCommissionGenerated; // Total commission from all trades
     
     // Token creation limits
     mapping(address => uint256) public creatorTokenCount;
@@ -91,14 +97,14 @@ contract TokenFactory is ReentrancyGuard, Ownable, ITokenFactory {
         uint256 communitySize,
         uint256 liquidityDepth
     ) internal nonReentrant returns (address) {
-        // Enhanced validation
-        require(msg.value >= launchFee + minInitialLiquidity, "Insufficient fee");
-        require(totalSupply > 0 && totalSupply <= 1e27, "Invalid supply");
-        require(targetMarketCap > 0 && targetMarketCap <= 1e24, "Invalid cap");
-        require(creatorFeePercent >= 30 && creatorFeePercent <= 95, "Invalid fee");
-        require(bytes(name).length > 0 && bytes(name).length <= 32, "Invalid name");
-        require(bytes(symbol).length > 0 && bytes(symbol).length <= 10, "Invalid symbol");
-        require(creatorTokenCount[msg.sender] < maxTokensPerCreator, "Max tokens reached");
+        // Revenue-generating validation while keeping platform open
+        require(msg.value >= launchFee, "Low fee");
+        require(totalSupply > 0, "Bad supply");
+        require(targetMarketCap > 0, "Bad cap");
+        require(bytes(name).length > 0, "Bad name");
+        require(bytes(symbol).length > 0, "Bad symbol");
+        require(creatorFeePercent + platformCommissionRate <= MAX_TOTAL_COMMISSION, "High fees");
+        // Still very open but with sustainable revenue model
         
         // Deploy new enhanced token contract
         CreatorToken newToken = new CreatorToken(
@@ -133,8 +139,9 @@ contract TokenFactory is ReentrancyGuard, Ownable, ITokenFactory {
         // Send initial liquidity to token contract
         payable(tokenAddress).transfer(liquidityDepth);
         
-        // Collect launch fee
+        // Collect launch fee for platform revenue
         totalFeesCollected += launchFee;
+        platformRevenue += launchFee;
         
         emit TokenCreated(
             tokenAddress,
@@ -183,24 +190,54 @@ contract TokenFactory is ReentrancyGuard, Ownable, ITokenFactory {
     
     // Admin functions
     function setLaunchFee(uint256 newFee) external onlyOwner {
-        require(newFee <= 0.1 ether, "Fee too high");
+        // Keep platform competitive - max fee 0.01 ETH (~$20)
+        require(newFee <= 0.01 ether, "High fee");
         emit LaunchFeeUpdated(launchFee, newFee);
         launchFee = newFee;
     }
     
+    function setPlatformCommissionRate(uint256 newRate) external onlyOwner {
+        require(newRate <= 200, "High rate"); // Max 2%
+        platformCommissionRate = newRate;
+    }
+    
+    function setCreatorCommissionRate(uint256 newRate) external onlyOwner {
+        require(newRate <= 400, "Creator commission too high"); // Max 4%
+        creatorCommissionRate = newRate;
+    }
+    
     function setMinInitialLiquidity(uint256 newMin) external onlyOwner {
-        // Allow very low threshold for testnet: 0.0000001 ether (1e-7)
-        require(newMin >= 0.0000001 ether, "Too low");
+        // No minimum required - completely open
+        require(newMin >= 0, "Cannot be negative");
         minInitialLiquidity = newMin;
     }
     
     function setMaxTokensPerCreator(uint256 newMax) external onlyOwner {
-        require(newMax > 0 && newMax <= 20, "Invalid max");
+        // Keep high limits for user freedom
+        require(newMax >= 1000, "Must allow significant token creation");
         maxTokensPerCreator = newMax;
     }
     
+    function withdrawPlatformRevenue() external onlyOwner {
+        uint256 amount = platformRevenue;
+        platformRevenue = 0;
+        payable(owner()).transfer(amount);
+    }
+    
     function withdrawFees() external onlyOwner {
+        // Withdraw any remaining ETH (backup function)
         payable(owner()).transfer(address(this).balance);
+    }
+    
+    /**
+     * @dev Record platform commission from trading
+     * Called by CreatorToken contracts when trades happen
+     */
+    function recordPlatformCommission(uint256 amount) external payable {
+        require(isValidToken[msg.sender], "Only valid tokens");
+        require(msg.value == amount, "Amount mismatch");
+        platformRevenue += amount;
+        totalCommissionGenerated += amount;
     }
     
     receive() external payable {}

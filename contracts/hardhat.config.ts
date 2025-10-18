@@ -1,37 +1,44 @@
 import type { HardhatUserConfig } from "hardhat/config";
-import "@nomicfoundation/hardhat-toolbox-viem"; // side-effect import registers hre.viem
-import "@nomicfoundation/hardhat-ignition-viem"; // side-effect import registers ignition tasks
+import "@nomicfoundation/hardhat-toolbox-viem";
+import "@nomicfoundation/hardhat-ignition-viem";
 import dotenv from "dotenv";
 dotenv.config();
 
 const config: HardhatUserConfig = {
   solidity: {
-    version: "0.8.28",
+    version: "0.8.20",
     settings: {
       optimizer: {
         enabled: true,
-        runs: 200, // Higher runs generally reduce runtime gas (slightly larger bytecode)
+        runs: 200,
       },
+      viaIR: true,
       metadata: {
         bytecodeHash: "none",
       },
-      outputSelection: {
-        "*": {
-          "*": ["evm.bytecode", "evm.deployedBytecode", "abi"],
-        },
-      },
-      // Additional size optimizations
-      viaIR: true, // Enable IR for better optimization
     },
   },
   networks: {
-    hardhatMainnet: {
+    hardhat: {
       type: "edr-simulated",
-      chainType: "l1",
+      chainId: 31337,
     },
-    hardhatOp: {
-      type: "edr-simulated",
-      chainType: "op",
+    localhost: {
+      type: "http",
+      url: "http://127.0.0.1:8545",
+      chainId: 31337,
+    },
+    "0g-testnet": {
+      type: "http",
+      url: "https://evmrpc-testnet.0g.ai",
+      chainId: 16600,
+      accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+    },
+    "0g-mainnet": {
+      type: "http",
+      url: "https://evmrpc.0g.ai",
+      chainId: 16661,
+      accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
     },
   },
 };

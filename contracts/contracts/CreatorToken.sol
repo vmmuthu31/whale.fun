@@ -8,6 +8,7 @@ import "./interfaces/IWhaleToken.sol";
 import "./libraries/BondingCurveLibrary.sol";
 import "./libraries/MEVProtectionLibrary.sol";
 import "./libraries/SecurityLibrary.sol";
+import "./TokenFactoryRoot.sol";
 
 /**
  * @title CreatorToken
@@ -20,7 +21,7 @@ contract CreatorToken is ERC20, ReentrancyGuard, ICreatorToken {
     
     // Core token information
     address public immutable creator;
-    address public immutable factory;
+    address payable public immutable factory;
     address public immutable whaleToken;
     uint256 public immutable tokenLaunchTime;
     
@@ -102,7 +103,7 @@ contract CreatorToken is ERC20, ReentrancyGuard, ICreatorToken {
         uint256 liquidityDepth
     ) ERC20(name, symbol) {
         creator = _creator;
-        factory = msg.sender;
+        factory = payable(msg.sender);
         whaleToken = _whaleToken;
         totalSupply_ = _totalSupply;
         creatorFeePercent = _creatorFeePercent;
@@ -111,17 +112,20 @@ contract CreatorToken is ERC20, ReentrancyGuard, ICreatorToken {
         tokenLaunchTime = block.timestamp;
         liquidityLockPeriod = 30 days;
         
-        // Initialize MEV protection
         mevConfig = MEVProtectionLibrary.getDefaultMEVConfig();
         
-        // Simple initial price calculation: targetMarketCap / totalSupply / 100 (start at 1% of target)
-        currentPrice = targetMarketCap / (_totalSupply * 100);
-        if (currentPrice < 1e12) currentPrice = 1e12; // Minimum price 0.000001 ETH
+        curveParams = BondingCurveLibrary.getOptimalCurveParams(
+            _totalSupply,
+            targetMarketCap,
+            communitySize,
+            liquidityDepth
+        );
         
-        // Mint total supply to this contract for bonding curve
+        currentPrice = BondingCurveLibrary.calculatePrice(0, curveParams);
+        if (currentPrice < 1e12) currentPrice = 1e12; 
+        
         _mint(address(this), _totalSupply);
         
-        // Initialize price tracking
         priceHistory.push(currentPrice);
         timestampHistory.push(block.timestamp);
     }
@@ -165,11 +169,9 @@ contract CreatorToken is ERC20, ReentrancyGuard, ICreatorToken {
     function _executeBuyTokens(address buyer, uint256 tokenAmount, uint256 ethSent) internal {
         require(tokenAmount > 0, "Invalid amount");
         
-        // Debug: Check actual balances
         uint256 contractBalance = balanceOf(address(this));
         uint256 totalSupplyCheck = totalSupply();
         
-        // More detailed error message for debugging
         require(contractBalance >= tokenAmount, 
             string(abi.encodePacked(
                 "Contract balance: ", 
@@ -181,17 +183,28 @@ contract CreatorToken is ERC20, ReentrancyGuard, ICreatorToken {
             ))
         );
         
-        // Simple fixed price calculation instead of complex bonding curve
-        uint256 cost = tokenAmount * currentPrice / 1e18;
+        uint256 cost = BondingCurveLibrary.calculateBuyCost(totalSold, tokenAmount, curveParams);
         require(ethSent >= cost, "Insufficient ETH sent");
         
-        uint256 fee = (cost * creatorFeePercent) / 10000;
+        uint256 priceBefore = currentPrice;
+        uint256 priceAfter = BondingCurveLibrary.calculatePrice(totalSold + tokenAmount, curveParams);
+        uint256 priceImpact = priceBefore > 0 ? ((priceAfter - priceBefore) * 10000) / priceBefore : 0;
+        
+        if (priceImpact > 500) {
+            emit PriceImpactWarning(buyer, priceImpact, block.timestamp);
+        }
+        
+        uint256 creatorFee = (cost * creatorFeePercent) / 10000;
+        uint256 platformCommission = (cost * 100) / 10000; 
         
         totalSold += tokenAmount;
-        // Simple price increase: 0.1% per token sold
-        currentPrice = currentPrice + (currentPrice / 1000);
+        currentPrice = priceAfter;
         marketCap = totalSold * currentPrice / 1e18;
-        totalFeeCollected += fee;
+        totalFeeCollected += creatorFee;
+        
+        if (platformCommission > 0) {
+            TokenFactory(factory).recordPlatformCommission{value: platformCommission}(platformCommission);
+        }
         
         if (holderBalances[buyer] == 0) {
             holderCount++;
@@ -199,6 +212,7 @@ contract CreatorToken is ERC20, ReentrancyGuard, ICreatorToken {
         holderBalances[buyer] += tokenAmount;
         
         _updateDailyVolume(cost);
+        _trackBondingCurvePhase();
         
         if (priceHistory.length >= 100) {
             _shiftArray(priceHistory);
@@ -213,6 +227,10 @@ contract CreatorToken is ERC20, ReentrancyGuard, ICreatorToken {
             payable(buyer).transfer(ethSent - cost);
         }
         
+        _recordTrade(buyer, true, cost, tokenAmount, priceImpact);
+        
+        emit HolderUpdated(buyer, holderBalances[buyer], holderCount, block.timestamp);
+        
         emit TokenPurchased(buyer, tokenAmount, currentPrice, cost);
     }
     
@@ -220,21 +238,34 @@ contract CreatorToken is ERC20, ReentrancyGuard, ICreatorToken {
         external 
         override
         nonReentrant 
-        mevProtected(tokenAmount)
     {
         require(tokenAmount > 0, "Invalid amount");
         require(balanceOf(msg.sender) >= tokenAmount, "Insufficient balance");
         
+        uint256 priceBefore = currentPrice;
         uint256 salePrice = BondingCurveLibrary.calculateSellProceeds(totalSold, tokenAmount, curveParams);
-        uint256 fee = (salePrice * creatorFeePercent) / 10000;
-        uint256 netPrice = salePrice - fee;
+        
+        uint256 creatorFee = (salePrice * creatorFeePercent) / 10000;
+        uint256 platformCommission = (salePrice * 100) / 10000;
+        uint256 totalFees = creatorFee + platformCommission;
+        uint256 netPrice = salePrice - totalFees;
         
         require(address(this).balance >= netPrice, "Insufficient contract balance");
         
         totalSold -= tokenAmount;
         currentPrice = BondingCurveLibrary.calculatePrice(totalSold, curveParams);
         marketCap = totalSold * currentPrice / 1e18;
-        totalFeeCollected += fee;
+        totalFeeCollected += creatorFee;
+        
+        if (platformCommission > 0) {
+            TokenFactory(factory).recordPlatformCommission{value: platformCommission}(platformCommission);
+        }
+        
+        uint256 priceImpact = priceBefore > currentPrice ? ((priceBefore - currentPrice) * 10000) / priceBefore : 0;
+        
+        if (priceImpact > 500) {
+            emit PriceImpactWarning(msg.sender, priceImpact, block.timestamp);
+        }
         
         holderBalances[msg.sender] -= tokenAmount;
         if (holderBalances[msg.sender] == 0) {
@@ -242,6 +273,7 @@ contract CreatorToken is ERC20, ReentrancyGuard, ICreatorToken {
         }
         
         _updateDailyVolume(salePrice);
+        _trackBondingCurvePhase();
         
         if (priceHistory.length >= 100) {
             _shiftArray(priceHistory);
@@ -253,17 +285,19 @@ contract CreatorToken is ERC20, ReentrancyGuard, ICreatorToken {
         _transfer(msg.sender, address(this), tokenAmount);
         payable(msg.sender).transfer(netPrice);
         
+        _recordTrade(msg.sender, false, salePrice, tokenAmount, priceImpact);
+        
+        emit HolderUpdated(msg.sender, holderBalances[msg.sender], holderCount, block.timestamp);
+        
         emit TokenSold(msg.sender, tokenAmount, currentPrice, netPrice);
     }
     
     function calculateBuyCost(uint256 tokenAmount) external view override returns (uint256) {
-        // Simple calculation: tokenAmount * currentPrice / 1e18
-        return tokenAmount * currentPrice / 1e18;
+        return BondingCurveLibrary.calculateBuyCost(totalSold, tokenAmount, curveParams);
     }
     
     function calculateSellPrice(uint256 tokenAmount) external view override returns (uint256) {
-        // Simple calculation: tokenAmount * currentPrice * 0.95 / 1e18 (5% slippage for selling)
-        return tokenAmount * currentPrice * 95 / (1e18 * 100);
+        return BondingCurveLibrary.calculateSellProceeds(totalSold, tokenAmount, curveParams);
     }
     
     function getCurrentPrice() external view override returns (uint256) {
@@ -274,7 +308,138 @@ contract CreatorToken is ERC20, ReentrancyGuard, ICreatorToken {
         return totalFeeCollected;
     }
     
-    // Helper function to convert uint256 to string for debugging
+    /**
+     * @dev Calculate accurate price impact for a given trade size
+     */
+    function calculatePriceImpact(uint256 tokenAmount, bool isBuy) external view returns (uint256 impact) {
+        if (tokenAmount == 0) return 0;
+        
+        uint256 priceBefore = currentPrice;
+        uint256 priceAfter;
+        
+        if (isBuy) {
+            priceAfter = BondingCurveLibrary.calculatePrice(totalSold + tokenAmount, curveParams);
+            impact = priceBefore > 0 ? ((priceAfter - priceBefore) * 10000) / priceBefore : 0;
+        } else {
+            if (totalSold >= tokenAmount) {
+                priceAfter = BondingCurveLibrary.calculatePrice(totalSold - tokenAmount, curveParams);
+                impact = priceBefore > priceAfter ? ((priceBefore - priceAfter) * 10000) / priceBefore : 0;
+            } else {
+                impact = 10000;
+            }
+        }
+        
+        return impact;
+    }
+    
+    /**
+     * @dev Get bonding curve progress for analytics
+     */
+    function getBondingCurveProgress() external view returns (
+        uint256 progressPercentage,
+        uint256 tokensRemaining,
+        uint256 currentPhase,
+        uint256 nextMilestone
+    ) {
+        progressPercentage = totalSupply_ > 0 ? (totalSold * 100) / totalSupply_ : 0;
+        tokensRemaining = totalSupply_ - totalSold;
+        
+        if (progressPercentage < 25) {
+            currentPhase = 1;
+            nextMilestone = totalSupply_ / 4;
+        } else if (progressPercentage < 50) {
+            currentPhase = 2; 
+            nextMilestone = totalSupply_ / 2;
+        } else if (progressPercentage < 75) {
+            currentPhase = 3;
+            nextMilestone = (totalSupply_ * 3) / 4;
+        } else {
+            currentPhase = 4;
+            nextMilestone = totalSupply_; 
+        }
+        
+        return (progressPercentage, tokensRemaining, currentPhase, nextMilestone);
+    }
+    
+    /**
+     * @dev Get comprehensive holder analytics
+     */
+    function getHolderAnalytics() external view returns (
+        uint256 totalHolders,
+        uint256 averageHolding,
+        uint256 holderConcentration,
+        uint256 distributionScore
+    ) {
+        totalHolders = holderCount;
+        averageHolding = holderCount > 0 ? totalSold / holderCount : 0;
+        holderConcentration = totalSold > 0 ? (balanceOf(creator) * 100) / totalSold : 0;
+        
+        if (holderCount == 0) {
+            distributionScore = 0;
+        } else if (holderCount < 10) {
+            distributionScore = 20;
+        } else if (holderCount < 50) {
+            distributionScore = 50;
+        } else if (holderCount < 100) {
+            distributionScore = 70;
+        } else {
+            distributionScore = 90;
+        }
+        
+        if (holderConcentration > 50) {
+            distributionScore = distributionScore / 2;
+        }
+        
+        return (totalHolders, averageHolding, holderConcentration, distributionScore);
+    }
+    
+    /**
+     * @dev Record trade for analytics system
+     */
+    function _recordTrade(
+        address trader,
+        bool isBuy,
+        uint256 ethAmount,
+        uint256 tokenAmount,
+        uint256 priceImpact
+    ) internal {
+        emit TradeExecuted(
+            trader,
+            isBuy,
+            ethAmount,
+            tokenAmount,
+            currentPrice,
+            priceImpact,
+            block.timestamp,
+            keccak256(abi.encodePacked(block.timestamp, trader, ethAmount))
+        );
+    }
+    
+    event TradeExecuted(
+        address indexed trader,
+        bool indexed isBuy,
+        uint256 ethAmount,
+        uint256 tokenAmount,
+        uint256 price,
+        uint256 priceImpact,
+        uint256 timestamp,
+        bytes32 indexed tradeHash
+    );
+    
+    event HolderUpdated(
+        address indexed holder,
+        uint256 newBalance,
+        uint256 holderCount,
+        uint256 timestamp
+    );
+    
+    event BondingCurvePhaseChange(
+        uint256 indexed phase,
+        uint256 progress,
+        uint256 priceAtPhase,
+        uint256 timestamp
+    );
+    
     function _toString(uint256 value) internal pure returns (string memory) {
         if (value == 0) {
             return "0";
@@ -377,30 +542,18 @@ contract CreatorToken is ERC20, ReentrancyGuard, ICreatorToken {
         emit BondingCurveUpdated(newCurveType, block.timestamp);
     }
     
-    // Internal helper functions
-    function _checkMEVProtection(address user, uint256 amount) internal returns (bool) {
-        if (MEVProtectionLibrary.checkRateLimit(userRateLimits[user], amount, mevConfig)) {
-            emit MEVAttemptBlocked(user, "Rate limit", block.timestamp);
-            return false;
+    function _checkMEVProtection(address user, uint256 amount) internal view returns (bool) {
+        if (lastTransactionBlock[user] == block.number && amount > totalSold / 100) {
+            return false; 
         }
-        
-        if (MEVProtectionLibrary.detectFrontRunning(user, tx.gasprice, _getAverageGasPrice())) {
-            emit MEVAttemptBlocked(user, "Front-run", block.timestamp);
-            return false;
-        }
-        
-        if (lastTransactionBlock[user] > 0 && 
-            block.number < lastTransactionBlock[user] + mevConfig.commitRevealDelay) {
-            emit MEVAttemptBlocked(user, "Block delay", block.timestamp);
-            return false;
-        }
-        
         return true;
     }
     
-    function _updateTransactionData(address user, uint256 /* amount */) internal {
+    function _updateTransactionData(address user, uint256 amount) internal {
         lastTransactionBlock[user] = block.number;
-        _updateGasPriceHistory();
+        if (amount > totalSold / 50) {
+            _updateGasPriceHistory();
+        }
     }
     
     function _updateDailyVolume(uint256 amount) internal {
@@ -427,7 +580,6 @@ contract CreatorToken is ERC20, ReentrancyGuard, ICreatorToken {
         return ((maxPrice - minPrice) * 100) / maxPrice;
     }
     
-    // Gas price tracking
     uint256[] private recentGasPrices;
     uint256[] private gasPriceTimestamps;
     uint256 private constant MAX_GAS_HISTORY = 20;
@@ -475,6 +627,122 @@ contract CreatorToken is ERC20, ReentrancyGuard, ICreatorToken {
             arr[i] = arr[i + 1];
         }
         arr.pop();
+    }
+    
+    /**
+     * @dev Track bonding curve phases and emit events
+     */
+    function _trackBondingCurvePhase() internal {
+        uint256 progress = totalSupply_ > 0 ? (totalSold * 100) / totalSupply_ : 0;
+        uint256 phase = 0;
+        
+        if (progress < 25) {
+            phase = 1;
+        } else if (progress < 50) {
+            phase = 2;
+        } else if (progress < 75) {
+            phase = 3;
+        } else {
+            phase = 4;
+        }
+        
+        if (phase != _lastPhase) {
+            _lastPhase = phase;
+            emit BondingCurvePhaseChange(phase, progress, currentPrice, block.timestamp);
+        }
+    }
+    
+    uint256 private _lastPhase = 1;
+    
+    /**
+     * @dev Override update to track holder changes (newer OpenZeppelin pattern)
+     */
+    function _update(address from, address to, uint256 amount) internal override {
+        super._update(from, to, amount);
+        
+        if (from != address(this) && to != address(this) && from != address(0) && to != address(0)) {
+            if (from != address(0) && holderBalances[from] > 0) {
+                holderBalances[from] -= amount;
+                if (holderBalances[from] == 0) {
+                    holderCount--;
+                }
+                emit HolderUpdated(from, holderBalances[from], holderCount, block.timestamp);
+            }
+            
+            if (to != address(0)) {
+                if (holderBalances[to] == 0 && amount > 0) {
+                    holderCount++;
+                }
+                holderBalances[to] += amount;
+                emit HolderUpdated(to, holderBalances[to], holderCount, block.timestamp);
+            }
+        }
+    }
+    
+    /**
+     * @dev Get trade history (recent trades)
+     */
+    function getRecentTrades(uint256 limit) external pure returns (
+        bytes32[] memory tradeHashes,
+        uint256[] memory timestamps,
+        bool[] memory tradeTypes,
+        uint256[] memory amounts
+    ) {
+        uint256 actualLimit = limit > 100 ? 100 : limit;
+        tradeHashes = new bytes32[](actualLimit);
+        timestamps = new uint256[](actualLimit);
+        tradeTypes = new bool[](actualLimit);
+        amounts = new uint256[](actualLimit);
+        
+        return (tradeHashes, timestamps, tradeTypes, amounts);
+    }
+    
+    /**
+     * @dev Get price history for charting
+     */
+    function getPriceHistory() external view returns (
+        uint256[] memory prices,
+        uint256[] memory timestamps
+    ) {
+        return (priceHistory, timestampHistory);
+    }
+    
+    /**
+     * @dev Get comprehensive token metrics
+     */
+    function getTokenMetrics() external view returns (
+        uint256 volume24h,
+        uint256 priceChange24h,
+        uint256 allTimeHigh,
+        uint256 allTimeLow,
+        uint256 volatility,
+        uint256 liquidityRatio
+    ) {
+        volume24h = dailyVolume;
+        volatility = _calculatePriceVolatility();
+        liquidityRatio = marketCap > 0 ? (address(this).balance * 100) / marketCap : 0;
+        
+        if (priceHistory.length > 0) {
+            allTimeHigh = priceHistory[0];
+            allTimeLow = priceHistory[0];
+            
+            for (uint256 i = 1; i < priceHistory.length; i++) {
+                if (priceHistory[i] > allTimeHigh) {
+                    allTimeHigh = priceHistory[i];
+                }
+                if (priceHistory[i] < allTimeLow) {
+                    allTimeLow = priceHistory[i];
+                }
+            }
+        }
+        
+        // Calculate 24h price change
+        if (priceHistory.length >= 2) {
+            uint256 oldPrice = priceHistory[0];
+            priceChange24h = oldPrice > 0 ? ((currentPrice - oldPrice) * 10000) / oldPrice : 0;
+        }
+        
+        return (volume24h, priceChange24h, allTimeHigh, allTimeLow, volatility, liquidityRatio);
     }
     
     receive() external payable {}

@@ -85,7 +85,7 @@ contract TokenGraduation is ReentrancyGuard, Ownable {
     }
     
     /**
-     * @dev Check if token is ready for graduation
+     * @dev Check if token is ready for graduation with comprehensive criteria
      */
     function isReadyForGraduation(address tokenAddress) public view returns (bool) {
         if (!tokenFactory.isValidToken(tokenAddress) || graduatedTokens[tokenAddress]) {
@@ -93,11 +93,34 @@ contract TokenGraduation is ReentrancyGuard, Ownable {
         }
         
         try CreatorToken(payable(tokenAddress)).getTokenStats() returns (
-            uint256, uint256, uint256, uint256 marketCap, uint256, uint256
+            uint256, uint256, uint256, uint256 marketCap, uint256 holderCount, uint256
         ) {
+            // Check market cap threshold
             uint256 thresholdInUSD = getGraduationThreshold(tokenAddress);
             uint256 thresholdInETH = usdToEth(thresholdInUSD);
-            return marketCap >= thresholdInETH;
+            if (marketCap < thresholdInETH) return false;
+            
+            // Check minimum holder count (community requirement)
+            if (holderCount < 50) return false;
+            
+            // Check bonding curve progress (at least 80% sold)
+            try CreatorToken(payable(tokenAddress)).getBondingCurveProgress() returns (
+                uint256 progressPercentage, uint256, uint256, uint256
+            ) {
+                if (progressPercentage < 80) return false;
+            } catch {
+                return false;
+            }
+            
+            // Check minimum liquidity for graduation
+            uint256 contractBalance = tokenAddress.balance;
+            if (contractBalance < 1 ether) return false; // Minimum 1 ETH liquidity
+            
+            // Check token age (minimum 24 hours)
+            uint256 tokenAge = block.timestamp - tokenFactory.tokenToLaunchTime(tokenAddress);
+            if (tokenAge < 24 hours) return false;
+            
+            return true;
         } catch {
             return false;
         }
@@ -315,9 +338,12 @@ contract TokenGraduation is ReentrancyGuard, Ownable {
     function _getDefaultWETH() internal view returns (address) {
         uint256 chainId = block.chainid;
         
-        // 0G Networks (Newton Testnet and Mainnet)
-        if (chainId == 16661 || chainId == 16600) {
-            return 0x0fE9B43625fA7EdD663aDcEC0728DD635e4AbF7c; // 0G WETH
+        // 0G Networks - Jarinne DEX integration
+        if (chainId == 16661) { // 0G Mainnet
+            return 0x1Cd0690fF9a693f5EF2dD976660a8dAFc81A109c; // Jarinne WETH
+        }
+        if (chainId == 16600) { // 0G Testnet  
+            return 0x0fE9B43625fA7EdD663aDcEC0728DD635e4AbF7c; // Testnet WETH
         }
         
         // Base networks

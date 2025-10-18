@@ -120,14 +120,23 @@ library BondingCurveLibrary {
         // Always use exponential curve with safe parameters
         params.curveType = CurveType.EXPONENTIAL;
         
+        // Adjust steepness based on community size and target market cap
+        uint256 baseSteepness = PRECISION / 5000; // Base steepness
+        
+        // Larger communities get gentler curves (easier to buy)
+        if (communitySize > 10000) {
+            baseSteepness = baseSteepness * 80 / 100; // 20% gentler
+        } else if (communitySize > 1000) {
+            baseSteepness = baseSteepness * 90 / 100; // 10% gentler
+        }
+        
         // Very gentle exponential growth to prevent overflow
-        // Steepness determines how fast the price grows
         if (targetMarketCap < 10 ether) {
-            params.steepness = PRECISION / 10000; // Very gentle for small tokens
+            params.steepness = baseSteepness / 2; // Very gentle for small tokens
         } else if (targetMarketCap < 100 ether) {
-            params.steepness = PRECISION / 5000; // Gentle for medium tokens
+            params.steepness = baseSteepness; // Normal for medium tokens
         } else {
-            params.steepness = PRECISION / 2000; // Moderate for large tokens
+            params.steepness = baseSteepness * 2; // Steeper for large tokens
         }
         
         // Calculate initial and final prices with safety bounds
