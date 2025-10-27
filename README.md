@@ -2,7 +2,7 @@
 
 A decentralized platform for creating and trading meme tokens with bonding curves, battle arenas, and community features.
 
-## 🌐 Deployed Contract Addresses
+## 🌐 Deployed Contract Addresses and Networks
 
 ### 0G Testnet (Chain ID: 16602)
 
