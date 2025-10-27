@@ -103,28 +103,32 @@ export class TokenDataService {
       // Create public client for read operations based on current chain
       const { createPublicClient, http } = await import("viem");
 
-      // Define 0G Mainnet chain configuration
-      const zeroGMainnet = {
+      // Define 0G Mainnet & Testnet chain configuration
+      const { defineChain } = await import("viem");
+      const zeroGMainnet = defineChain({
         id: 16661,
         name: "0G Mainnet",
         network: "0g-mainnet",
-        nativeCurrency: {
-          decimals: 18,
-          name: "0G",
-          symbol: "0G",
-        },
+        nativeCurrency: { decimals: 18, name: "0G", symbol: "0G" },
         rpcUrls: {
-          default: { http: ["https://evmrpc.0g.ai"] },
-          public: { http: ["https://evmrpc.0g.ai"] },
+          default: { http: [process.env.NEXT_PUBLIC_0G_RPC_URL || "https://evmrpc.0g.ai"] },
+          public: { http: [process.env.NEXT_PUBLIC_0G_RPC_URL || "https://evmrpc.0g.ai"] },
         },
-        blockExplorers: {
-          default: {
-            name: "0G Chain Explorer",
-            url: "https://chainscan.0g.ai",
-          },
-        },
+        blockExplorers: { default: { name: "0G Chain Explorer", url: "https://chainscan.0g.ai" } },
         testnet: false,
-      } as const;
+      });
+      const zeroGTestnet = defineChain({
+        id: 16602,
+        name: "0G Testnet",
+        network: "0g-testnet",
+        nativeCurrency: { decimals: 18, name: "A0GI", symbol: "A0GI" },
+        rpcUrls: {
+          default: { http: [process.env.NEXT_PUBLIC_0G_TESTNET_RPC_URL || "https://evmrpc-testnet.0g.ai"] },
+          public: { http: [process.env.NEXT_PUBLIC_0G_TESTNET_RPC_URL || "https://evmrpc-testnet.0g.ai"] },
+        },
+        blockExplorers: { default: { name: "0G Explorer", url: "https://chainscan-newton.0g.ai" } },
+        testnet: true,
+      });
 
       try {
         // Prefer provided chainId, else read from wallet
@@ -133,13 +137,18 @@ export class TokenDataService {
           chainId = Number(connection.network.chainId);
         }
       } catch (error) {
-        console.warn("Could not determine chain, using 0G Mainnet:", error);
-        chainId = 16661; // Default to 0G Mainnet
+        console.warn("Could not determine chain, defaulting to 0G Testnet:", error);
+        chainId = 16602; // Default to 0G Testnet
       }
 
+      const selectedChain = chainId === 16661 ? zeroGMainnet : zeroGTestnet;
+      const selectedRpc = chainId === 16661
+        ? (process.env.NEXT_PUBLIC_0G_RPC_URL || "https://evmrpc.0g.ai")
+        : (process.env.NEXT_PUBLIC_0G_TESTNET_RPC_URL || "https://evmrpc-testnet.0g.ai");
+
       const publicClient = createPublicClient({
-        chain: zeroGMainnet,
-        transport: http("https://evmrpc.0g.ai"),
+        chain: selectedChain,
+        transport: http(selectedRpc),
       });
 
       // Fetch basic token info from factory

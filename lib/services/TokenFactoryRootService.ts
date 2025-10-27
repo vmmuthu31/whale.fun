@@ -66,6 +66,11 @@ export const TOKEN_FACTORY_ROOT_CONFIG: ContractConfig = {
   name: "TokenFactoryRoot",
   abi: TokenFactoryRootABI,
   deployments: {
+    16602: {
+      address: "0x24267001806bccce23b1e453da83e4c5ec02d2b8",
+      deployedAt: 0,
+      verified: false,
+    },
     16661: {
       address: "0x9Da032047eCaFE668360C3b290420E785bF46598",
       deployedAt: 0,

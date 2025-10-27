@@ -27,15 +27,15 @@ const ExplorePage = () => {
 
   useEffect(() => {
     fetchTokens();
-  }, []);
+  }, [chainId]);
 
   // Check network and balance when component mounts or when chain/address changes
   useEffect(() => {
     const checkNetworkAndBalance = async () => {
       // Check and switch network if needed
-      if (address && chainId && chainId !== 16661) {
+      if (address && chainId && chainId !== 16602) {
         try {
-          await switchNetwork(16661);
+          await switchNetwork(16602);
           toast.success("Network switched to 0G Network");
         } catch (err) {
           toast.error("Please switch network", {
@@ -52,7 +52,7 @@ const ExplorePage = () => {
           if (balance < minBalance) {
             toast.warning("Low balance", {
               description: `You need at least 0.01 ${
-                SUPPORTED_NETWORKS[16661]?.currencySymbol || "ETH"
+                SUPPORTED_NETWORKS[16602]?.currencySymbol || "ETH"
               } to perform quick buy actions`,
               duration: 5000,
             });
@@ -121,13 +121,17 @@ const ExplorePage = () => {
 
       console.log("Starting to fetch tokens...");
 
-      // For explore page, we don't need wallet connection
-      // Use default mainnet chain ID since this is public data
-      const chainId = 16661; // 0G Mainnet
-      console.log("Using chain ID:", chainId);
+      // For homepage: if wallet not connected, default to 16602 (testnet).
+      // If connected, use the selected chain when supported; else fallback to 16602.
+      const selectedChainId = !address
+        ? 16602
+        : (chainId && SUPPORTED_NETWORKS[chainId])
+        ? chainId
+        : 16602;
+      console.log("Using chain ID:", selectedChainId);
 
       // Fetch tokens data
-      const tokensData = await tokenDataService.getAllTokensData(chainId);
+      const tokensData = await tokenDataService.getAllTokensData(selectedChainId);
       console.log("Fetched tokens data:", tokensData);
 
       setTokens(tokensData);

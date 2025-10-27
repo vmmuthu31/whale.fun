@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { formatNumber, formatCurrency } from "@/utils/formatters";
+import { SUPPORTED_NETWORKS } from "@/utils/Blockchain";
 import Image from "next/image";
 import { parseTokenMetadata } from "@/utils/tokenMetadata";
 import { Badge } from "@/components/ui/badge";
@@ -78,8 +79,9 @@ export default function PortfolioPage() {
 
       const factoryService = new TokenFactoryRootService();
 
-      // Use the current chain ID from wagmi
-      const currentChainId = wagmiChainId || 16661; // Default to 0G Network
+      // Select supported chain for reads (prefer wagmi chain)
+      const currentChainId =
+        (wagmiChainId && SUPPORTED_NETWORKS[wagmiChainId]) ? wagmiChainId : 16602;
 
       // Get tokens created by user
       let createdTokenAddresses: string[] = [];

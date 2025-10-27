@@ -74,7 +74,7 @@ const TokenCard = ({ token, index }: TokenCardProps) => {
     if (!chain || chain.id !== 16661) {
       // Try to switch to 0G Mainnet automatically
       try {
-        await switchNetwork(16661);
+        await switchNetwork(16602);
         // Wait a bit for the chain switch to complete
         await new Promise((resolve) => setTimeout(resolve, 1000));
       } catch (switchError: any) {

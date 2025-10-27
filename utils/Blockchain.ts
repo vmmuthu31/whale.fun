@@ -59,6 +59,16 @@ export const SUPPORTED_NETWORKS: Record<number, NetworkConfig> = {
     blockExplorerUrl: "https://chainscan.0g.ai",
     currencySymbol: "0G",
   },
+  // 0G Testnet
+  16602: {
+    chainId: 16602,
+    name: "0G Testnet",
+    rpcUrl:
+      (process.env.NEXT_PUBLIC_0G_TESTNET_RPC_URL as string) ||
+      "https://evmrpc-testnet.0g.ai",
+    blockExplorerUrl: "https://chainscan-newton.0g.ai",
+    currencySymbol: "A0GI",
+  },
 };
 
 /**

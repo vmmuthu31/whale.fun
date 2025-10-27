@@ -31,7 +31,7 @@ const config: HardhatUserConfig = {
     "0g-testnet": {
       type: "http",
       url: "https://evmrpc-testnet.0g.ai",
-      chainId: 16600,
+      chainId: 16602,
       accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
     },
     "0g-mainnet": {

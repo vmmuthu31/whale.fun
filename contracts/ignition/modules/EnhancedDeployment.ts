@@ -5,12 +5,10 @@ import { buildModule } from "@nomicfoundation/hardhat-ignition/modules";
  * Includes all contracts with proper analytics and MEV protection
  */
 const EnhancedWhaleDeployment = buildModule("EnhancedWhaleDeployment", (m) => {
-  // Configuration parameters for mainnet deployment
   const initialEthToUsdRate = m.getParameter(
     "initialEthToUsdRate",
     BigInt(2000) * BigInt(10) ** BigInt(18)
   );
-
   const platformFeePercent = m.getParameter("platformFeePercent", 500); // 5%
   const defaultGraduationThreshold = m.getParameter(
     "defaultGraduationThreshold",
@@ -59,19 +57,7 @@ const EnhancedWhaleDeployment = buildModule("EnhancedWhaleDeployment", (m) => {
     }
   );
 
-  // Deploy DEXConfiguration (Jarinne DEX integration)
-  const dexConfiguration = m.contract("DEXConfiguration", [], {
-    id: "DEXConfiguration",
-  });
 
-  // Deploy BossBattleArena (gaming/community features)
-  const bossBattleArena = m.contract(
-    "BossBattleArena",
-    [whaleToken, tokenFactory],
-    {
-      id: "BossBattleArena",
-    }
-  );
 
   // Configure TokenGraduation with initial parameters
   m.call(tokenGraduation, "updateEthToUsdRate", [initialEthToUsdRate], {
@@ -113,7 +99,7 @@ const EnhancedWhaleDeployment = buildModule("EnhancedWhaleDeployment", (m) => {
   // Configure TradingEngine fee structure
   m.call(
     tradingEngine,
-    "updateFeeStructure",
+    "updateFees",
     [
       30, // 0.3% base fee
       100, // 1% max fee
@@ -161,8 +147,6 @@ const EnhancedWhaleDeployment = buildModule("EnhancedWhaleDeployment", (m) => {
     tokenAnalytics,
     tradingEngine,
     dashboardProvider,
-    dexConfiguration,
-    bossBattleArena,
   };
 });
 

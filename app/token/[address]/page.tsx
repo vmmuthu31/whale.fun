@@ -16,7 +16,6 @@ import {
 } from "lucide-react";
 import { FaGlobe, FaTelegramPlane } from "react-icons/fa";
 import { FaXTwitter } from "react-icons/fa6";
-import TradingViewChart from "@/components/TradingViewChart";
 import {
   tokenDataService,
   type TokenData,
@@ -48,6 +47,8 @@ import {
 import { toast } from "sonner";
 import Link from "next/link";
 import { formatNumber, formatCurrency } from "@/utils/formatters";
+import { dashboardDataProviderService, type TokenDashboardData } from "@/lib/services/DashboardDataProviderService";
+import { SUPPORTED_NETWORKS, switchNetwork } from "@/utils/Blockchain";
 
 const TokenStat = ({
   name,
@@ -177,6 +178,8 @@ const TradePage = () => {
   // Chart type toggle (candle chart by default)
   const [chartType, setChartType] = useState<"line" | "candle">("candle");
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+  // Dashboard data
+  const [dashboard, setDashboard] = useState<TokenDashboardData | null>(null);
 
   // Wallet connection
   const { address: userAddress, isConnected, chain } = useAccount();
@@ -270,10 +273,10 @@ const TradePage = () => {
     let timer: any;
     (async () => {
       try {
-        // Use default 0G Network chainId for read-only operations
-        const chainId = 16661;
+        // Select supported chain for reads
+        const selectedChainId = (wagmiChainId && SUPPORTED_NETWORKS[wagmiChainId]) ? wagmiChainId : 16602;
         timer = setInterval(() => {
-          fetchChartData(chainId);
+          fetchChartData(selectedChainId);
         }, 30000); // refresh every 30s
       } catch {}
     })();
@@ -732,13 +735,21 @@ const TradePage = () => {
         setError(null);
       }
 
-      // Use default 0G Network chainId for read-only operations
-      const chainId = 16661;
+      // Select supported chain for reads (prefer wagmi chain)
+      const selectedChainId = (wagmiChainId && SUPPORTED_NETWORKS[wagmiChainId]) ? wagmiChainId : 16602;
 
-      const data = await tokenDataService.getTokenData(tokenAddress, chainId);
+      const data = await tokenDataService.getTokenData(tokenAddress, selectedChainId);
       if (data) {
         setTokenData(data);
-        await fetchChartData(chainId);
+        await fetchChartData(selectedChainId);
+
+        // Fetch richer dashboard data
+        try {
+          const dash = await dashboardDataProviderService.getTokenDashboardData(tokenAddress as `0x${string}`, selectedChainId);
+          setDashboard(dash);
+        } catch (e) {
+          console.warn("Dashboard data fetch failed", e);
+        }
       } else {
         if (!silent) setError("Token not found");
       }

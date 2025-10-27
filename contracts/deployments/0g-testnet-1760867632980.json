@@ -1,0 +1,14 @@
+{
+  "network": "0g-testnet",
+  "chainId": 16602,
+  "deployer": "0x95Cf028D5e86863570E300CAD14484Dc2068eB79",
+  "timestamp": "2025-10-19T09:53:52.978Z",
+  "contracts": {
+    "WhaleToken": "0x4b1356f057295b3298039d075bb489e6a74bc7de",
+    "TokenFactory": "0x24267001806bccce23b1e453da83e4c5ec02d2b8",
+    "TokenGraduation": "0x3173c25dde42d6afa3141c658579f526578552f1",
+    "TokenAnalytics": "0x4f68f326647c103c9810fd8af20a1f84fa6f3a37",
+    "TradingEngine": "0xc505d038fe2901fe624e6450887373baa29e455f",
+    "DashboardDataProvider": "0x1c7a8ca39057c856c512f45ebaadfbc276d6ad77"
+  }
+}

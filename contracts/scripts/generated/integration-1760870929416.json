@@ -1,0 +1,8 @@
+{
+  "network": "0g-testnet",
+  "deployer": "0x95Cf028D5e86863570E300CAD14484Dc2068eB79",
+  "createdToken": null,
+  "factory": "0x24267001806bccce23b1e453da83e4c5ec02d2b8",
+  "whaleToken": "0x4b1356f057295b3298039d075bb489e6a74bc7de",
+  "tradingEngine": "0xc505d038fe2901fe624e6450887373baa29e455f"
+}

@@ -358,7 +358,11 @@ const CreatePage: FC = () => {
         validateNetwork(chainId);
       } catch (networkError) {
         try {
-          await switchNetwork(16661);
+          // Prefer current wagmi chain if supported; otherwise default to 0G Testnet
+          const preferredChainId = SUPPORTED_NETWORKS[wagmiChainId || chainId]
+            ? (wagmiChainId || chainId)
+            : 16602;
+          await switchNetwork(preferredChainId);
           // Re-check connection after switch
           const connRetry = await getBlockchainConnection();
           const retryChainId = Number(connRetry.network.chainId);
@@ -405,6 +409,23 @@ const CreatePage: FC = () => {
       // Map chain ID to chain object and contract address
       const chainMap: Record<number, { chain: any; contractAddress: string }> =
         {
+          16602: {
+            chain: {
+              id: 16602,
+              name: "0G Testnet",
+              network: "0g-testnet",
+              nativeCurrency: { decimals: 18, name: "A0GI", symbol: "A0GI" },
+              rpcUrls: {
+                default: { http: ["https://evmrpc-testnet.0g.ai"] },
+                public: { http: ["https://evmrpc-testnet.0g.ai"] },
+              },
+              blockExplorers: {
+                default: { name: "0G Explorer", url: "https://chainscan-newton.0g.ai" },
+              },
+              testnet: true,
+            },
+            contractAddress: "0x24267001806bccce23b1e453da83e4c5ec02d2b8",
+          },
           16661: {
             chain: {
               id: 16661,
@@ -657,14 +678,14 @@ const CreatePage: FC = () => {
       await loadCreationCost();
       await checkNetwork();
 
-      // If connected but wrong network, try to switch
-      if (address && wagmiChainId && wagmiChainId !== 16661) {
+      // If connected but on unsupported network, try to switch to 0G Testnet by default
+      if (address && wagmiChainId && !SUPPORTED_NETWORKS[wagmiChainId]) {
         try {
-          await switchNetwork(16661);
-          toast.success("Network switched to 0G Network");
+          await switchNetwork(16602);
+          toast.success("Network switched to 0G Testnet");
         } catch (err) {
           toast.error("Please switch network", {
-            description: "This app requires 0G Network to function properly",
+            description: "This app requires 0G Network (mainnet or testnet) to function properly",
           });
         }
       }
