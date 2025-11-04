@@ -1,6 +1,8 @@
 import { tokenFactoryRootService } from "./TokenFactoryRootService";
 import { getBlockchainConnection } from "@/utils/Blockchain";
 import CreatorTokenABI from "@/config/abi/CreatorToken.json";
+import { createPublicClient, http } from 'viem';
+import { mainnet } from 'viem/chains';
 
 /**
  * Token data interface for explore page
@@ -80,6 +82,89 @@ export class TokenDataService {
         }
       } catch (error) {
         console.error("⚠️ Error fetching platform tokens:", error);
+      }
+
+      // Add x402 token with data fetched from the blockchain
+      try {
+        const x402TokenAddress = '0x71A682D8029d031EB57Ba6BB02d3B37D486fffA4';
+        console.log('🔄 Fetching x402 token data from blockchain...');
+        
+        // Create a public client for blockchain interaction
+        const publicClient = createPublicClient({
+          chain: mainnet,
+          transport: http()
+        });
+
+        // ABI for ERC20 standard functions
+        const erc20Abi = [
+          'function name() view returns (string)',
+          'function symbol() view returns (string)',
+          'function decimals() view returns (uint8)',
+          'function totalSupply() view returns (uint256)'
+        ] as const;
+
+        // Fetch token details with proper typing
+        const [name, symbol, decimals, totalSupply] = await Promise.all([
+          publicClient.readContract({
+            address: x402TokenAddress as `0x${string}`,
+            abi: erc20Abi,
+            functionName: 'name'
+          }).catch(() => 'X402 ZeroGravity Token'),
+          publicClient.readContract({
+            address: x402TokenAddress as `0x${string}`,
+            abi: erc20Abi,
+            functionName: 'symbol'
+          }).catch(() => 'X402'),
+          publicClient.readContract({
+            address: x402TokenAddress as `0x${string}`,
+            abi: erc20Abi,
+            functionName: 'decimals'
+          }).catch(() => 18), // Default to 18 decimals if not available
+          publicClient.readContract({
+            address: x402TokenAddress as `0x${string}`,
+            abi: erc20Abi,
+            functionName: 'totalSupply'
+          }).catch(() => BigInt(0))
+        ]) as [string, string, number, bigint];
+
+        // Get the transaction by hash instead of blockHash
+        let creatorAddress = '0x95Cf028D5e86863570E300CAD14484Dc2068eB79';
+        try {
+          const tx = await publicClient.getTransaction({
+            hash: '0xed829c0f0a657f3cb77a69daf6318e876a0b4d8ed480cda3c3121d92900e3b2e'
+          });
+          creatorAddress = tx.from;
+        } catch (error) {
+          console.error('Error fetching transaction:', error);
+        }
+
+        const x402TokenData: TokenData = {
+          id: x402TokenAddress,
+          address: x402TokenAddress,
+          name: name,
+          symbol: symbol,
+          description: `${symbol} Token for payment processing`,
+          logoUrl: 'https://i.imgur.com/your-x402-logo.png',
+          creator: creatorAddress,
+          launchTime: BigInt(Math.floor(Date.now() / 1000)),
+          currentPrice: BigInt(0),
+          marketCap: BigInt(0),
+          totalSupply: totalSupply,
+          totalSold: BigInt(0),
+          holderCount: BigInt(1),
+          dailyVolume: BigInt(0),
+          isLive: true,
+          priceChange: '0.0%',
+          priceValue: '0.00',
+          age: '1 day',
+          isExternal: true,
+          chainId: chainId || 1
+        };
+
+        tokensData.push(x402TokenData);
+        console.log(`✅ Successfully added x402 token: ${x402TokenData.symbol}`);
+      } catch (error) {
+        console.error('❌ Error adding x402 token:', error);
       }
 
       console.log("🎉 Successfully fetched all tokens data:", tokensData);

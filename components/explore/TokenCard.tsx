@@ -50,6 +50,12 @@ const TokenCard = ({ token, index }: TokenCardProps) => {
   const isReady = mounted && !!userAddress; // treat as connected when address is present
 
   const handleCardClick = () => {
+    // Special case for X402 token
+    if (token.symbol === 'X402' || token.name === 'X402 Token') {
+      router.push('/x402');
+      return;
+    }
+    
     if (token.isExternal) {
       router.push(`/token/external/${token.id}`);
     } else {
@@ -395,23 +401,36 @@ const TokenCard = ({ token, index }: TokenCardProps) => {
     >
       {/* Content on the left */}
       <div className="flex-1 min-w-0 pr-[170px] z-10">
-        <div
-          className={`text-xl font-extrabold tracking-tight truncate ${headingClass}`}
-        >
-          {token.name} <br />
+        <div className="flex items-center space-x-2">
+          <div
+            className={`text-xl font-extrabold tracking-tight truncate ${headingClass}`}
+          >
+            {token.name}
+          </div>
+          {(token.symbol === 'X402' || token.name === 'X402 Token') && (
+            <span className="bg-blue-500 text-white text-xs font-medium px-2 py-0.5 rounded-full">
+              x402
+            </span>
+          )}
+        </div>
+        <div className={`mt-1 text-sm/5 ${textClass}`}>
           (${token.symbol.toUpperCase()})
         </div>
         <div className={`mt-1 text-sm/5 ${textClass}`}>Market Cap</div>
         <div className="mt-1 flex items-baseline gap-2">
           <div className={`text-2xl font-bold truncate ${headingClass}`}>
-            {token.marketCap}
+            {token.currentPrice}
           </div>
-          <div className={`text-sm font-medium ${priceChangeClass}`}>
+          <div className={`flex items-center mt-1 medium ${priceChangeClass}`}>
             {token.priceChange}
           </div>
         </div>
         <button
-          className={`mt-4 inline-flex items-center gap-1 text-sm cursor-pointer font-semibold underline underline-offset-4 ${textClass} hover:${headingClass}`}
+          className={`mt-4 inline-flex items-center gap-1 text-sm cursor-pointer font-semibold underline underline-offset-4 ${textClass} hover:opacity-80`}
+          onClick={(e) => {
+            e.stopPropagation();
+            handleCardClick();
+          }}
         >
           View Token →
         </button>
