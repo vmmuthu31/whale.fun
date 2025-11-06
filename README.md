@@ -6,7 +6,7 @@ A decentralized platform for creating and trading meme tokens with bonding curve
 
 ### 0G Testnet (Chain ID: 16602)
 
-- **WhaleToken**: Not yet deployed
+- **WhaleToken**: yet to be deployed
 - **TokenFactory**: `0xb17f589b3dd10a05d4ef4ed1bdbe4cee8ec2da25`
 - **Network**: 0G Testnet Network
 - **RPC URL**: https://evmrpc-testnet.0g.ai
