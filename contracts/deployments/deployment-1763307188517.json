@@ -1,0 +1,22 @@
+{
+  "network": "0g-testnet",
+  "chainId": 16602,
+  "deployer": "0x95Cf028D5e86863570E300CAD14484Dc2068eB79",
+  "timestamp": "2025-11-16T15:33:08.515Z",
+  "contracts": {
+    "X402Token": "0x3ad11b72e3594d48a5e83e203ee817515b537234",
+    "X402TokenFactory": "0xe87ab02994a53e01ff5718fb938fa001d7306d22",
+    "X402TokenGraduation": "0x67ee031e405f6bf7188186b995d0a39d7f13e819",
+    "X402TradingEngine": "0x21d0df63ee21a7841bb96997b990ed28f1410419",
+    "X402DashboardDataProvider": "0x25cba5b40e5666e5b2b7b4eddf5989faa5dc148a",
+    "X402WhaleToken": "0xb5c1045cd8d8d08f37255a730f135250cd69b375"
+  },
+  "notes": [
+    "X402Token is the implementation contract for all X402 tokens",
+    "X402TokenFactory is used to deploy new X402 tokens",
+    "X402TokenGraduation handles token graduation logic",
+    "X402TradingEngine manages trading pairs and liquidity",
+    "X402DashboardDataProvider provides analytics and data for the frontend",
+    "X402WhaleToken is the platform's native token with staking and governance features"
+  ]
+}
