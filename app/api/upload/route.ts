@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
 
     const data = await pinataRes.json();
     const cid = data.IpfsHash || data.cid || data.Hash; // support various shapes
-    const url = `https://ipfs.io/ipfs/${cid}`;
+    const url = `https://purple-voluntary-minnow-145.mypinata.cloud/ipfs/${cid}`;
 
     return NextResponse.json({ cid, url });
   } catch (err: any) {

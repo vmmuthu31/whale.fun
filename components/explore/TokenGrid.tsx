@@ -20,10 +20,10 @@ const TokenGrid = ({ tokens }: TokenGridProps) => {
     if (!url || !url.trim()) return DEFAULT_IMG;
     const trimmed = url.trim();
     if (trimmed.startsWith("ipfs://")) {
-      return `https://ipfs.io/ipfs/${trimmed.slice(7)}`;
+      return `https://purple-voluntary-minnow-145.mypinata.cloud/ipfs/${trimmed.slice(7)}`;
     }
     if (trimmed.startsWith("ipfs/")) {
-      return `https://ipfs.io/${trimmed}`;
+      return `https://purple-voluntary-minnow-145.mypinata.cloud/ipfs/${trimmed}`;
     }
     // If it doesn't look like a normal URL or data URI, use default
     if (
