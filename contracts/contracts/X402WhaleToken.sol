@@ -52,7 +52,7 @@ contract X402WhaleToken is X402Token, ReentrancyGuard, Pausable {
         uint256 initialSupply,
         address initialOwner,
         string memory imageUrl_
-    ) X402Token(name_, symbol_, decimals_, initialSupply, initialOwner, imageUrl_) {
+    ) X402Token(name_, symbol_, decimals_, initialSupply, initialOwner, initialOwner, imageUrl_) {
         // MEV protection is initialized in the declaration
         
         // Set default staking reward rate (5% annual)

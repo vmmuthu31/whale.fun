@@ -53,11 +53,12 @@ contract X402Token is ERC20, ERC20Permit, Ownable {
         uint8 decimals_,
         uint256 initialSupply,
         address owner_,
+        address supplyHolder_,
         string memory imageUrl_
     ) ERC20(name_, symbol_) ERC20Permit(name_) Ownable(owner_) {
         _decimals = decimals_;
         _imageUrl = imageUrl_;
-        _mint(owner_, initialSupply);
+        _mint(supplyHolder_, initialSupply);
     }
     
     /**

@@ -64,16 +64,19 @@ async function handleCreateRequest(request: NextRequest): Promise<NextResponse> 
     // Event: TokenCreated(address indexed tokenAddress, string name, string symbol, uint8 decimals, uint256 totalSupply, address indexed creator)
     // We can parse the logs.
     
+    console.log('Receipt logs:', JSON.stringify(receipt.logs, null, 2));
+    
     let newTokenAddress = null;
     for (const log of receipt.logs) {
       try {
         const parsedLog = factoryContract.interface.parseLog(log);
+        console.log('Parsed log:', parsedLog?.name, parsedLog?.args);
         if (parsedLog && parsedLog.name === 'TokenCreated') {
           newTokenAddress = parsedLog.args[0]; // tokenAddress is the first arg
           break;
         }
       } catch (e) {
-        // Ignore logs that don't match
+        console.log('Failed to parse log:', e);
       }
     }
 
@@ -96,10 +99,17 @@ async function handleCreateRequest(request: NextRequest): Promise<NextResponse> 
 }
 
 export async function POST(request: NextRequest) {
-  // Create x402 middleware with payment amount (e.g. 0.1 tokens to create a new token)
-  // This acts as a "listing fee" or "creation fee"
-  const x402 = createX402Middleware('0.1');
-  
-  // Handle request with x402 payment protection
-  return x402.handleRequest(request, handleCreateRequest);
+  try {
+    // Create x402 middleware with payment amount (e.g. 0.1 tokens to create a new token)
+    const x402 = createX402Middleware('0.1');
+    
+    // Handle request with x402 payment protection
+    return await x402.handleRequest(request, handleCreateRequest);
+  } catch (error) {
+    console.error('Error in POST handler:', error);
+    return NextResponse.json(
+      { success: false, message: 'Internal server error', error: error instanceof Error ? error.message : String(error) },
+      { status: 500 }
+    );
+  }
 }

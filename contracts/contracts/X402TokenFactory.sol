@@ -77,6 +77,7 @@ contract X402TokenFactory is Ownable {
             decimals_,
             initialSupply,
             owner_,
+            msg.sender, // supplyHolder (Facilitator)
             imageUrl_
         );
         

@@ -6,8 +6,9 @@ import path from "path";
 import { fileURLToPath } from "url";
 import dotenv from "dotenv";
 
-// Load environment variables
-dotenv.config();
+// Load environment variables from root
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.resolve(__dirname, "../../.env") });
 
 // Define 0G Testnet chain
 const zeroGTestnet = defineChain({
@@ -54,7 +55,6 @@ async function main() {
   }
   
   // Load compiled contracts
-  const __dirname = path.dirname(fileURLToPath(import.meta.url));
   const artifactsPath = path.join(__dirname, "../artifacts/contracts");
   
   // Helper function to deploy a contract
@@ -74,13 +74,26 @@ async function main() {
       });
       
       console.log(`Transaction hash: ${hash}`);
-      const receipt = await publicClient.waitForTransactionReceipt({ 
-        hash,
-        confirmations: 1,
-        timeout: 120000 // 2 minutes timeout
-      });
       
-      if (!receipt.contractAddress) {
+      let receipt;
+      let retries = 5;
+      while (retries > 0) {
+        try {
+          receipt = await publicClient.waitForTransactionReceipt({ 
+            hash,
+            confirmations: 1,
+            timeout: 60000 // 1 minute per try
+          });
+          break;
+        } catch (e) {
+          console.log(`Waiting for receipt... (${retries} retries left)`);
+          retries--;
+          if (retries === 0) throw e;
+          await new Promise(resolve => setTimeout(resolve, 5000));
+        }
+      }
+      
+      if (!receipt || !receipt.contractAddress) {
         throw new Error('No contract address in receipt');
       }
       
@@ -111,6 +124,7 @@ async function main() {
     18,                         // decimals_ (18 is standard for most ERC20 tokens)
     initialSupply,              // initialSupply (1M tokens with 18 decimals)
     account.address,            // owner_
+    account.address,            // supplyHolder_
     defaultImageUrl             // imageUrl_
   ]);
   

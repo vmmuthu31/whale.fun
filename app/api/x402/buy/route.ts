@@ -10,11 +10,14 @@ const TOKEN_ABI = [
   'function transfer(address to, uint256 amount) external returns (bool)',
   'function balanceOf(address account) external view returns (uint256)',
   'function decimals() external view returns (uint8)',
+  'function totalSupply() external view returns (uint256)',
 ];
 
 const TOKEN_ADDRESS = process.env.TOKEN_ADDRESS || '0x71A682D8029d031EB57Ba6BB02d3B37D486fffA4';
 const PRIVATE_KEY = process.env.PRIVATE_KEY || '';
 const RPC_URL = process.env.RPC_URL || '';
+
+import { calculateBuyCost, getCurrentPrice } from '@/lib/bonding-curve';
 
 async function handleBuyRequest(request: NextRequest): Promise<NextResponse> {
   try {
@@ -42,15 +45,36 @@ async function handleBuyRequest(request: NextRequest): Promise<NextResponse> {
     const wallet = new ethers.Wallet(PRIVATE_KEY, provider);
     const tokenContract = new ethers.Contract(tokenAddress, TOKEN_ABI, wallet);
 
-    // Get token decimals
-    const decimals = await tokenContract.decimals();
-    const tokenAmount = ethers.parseUnits(amount, decimals);
+    // Get token decimals and supply info
+    const [decimals, totalSupply, facilitatorBalance] = await Promise.all([
+      tokenContract.decimals(),
+      tokenContract.totalSupply(),
+      tokenContract.balanceOf(wallet.address)
+    ]);
+
+    const decimalsNum = Number(decimals);
+    const totalSupplyNum = parseFloat(ethers.formatUnits(totalSupply, decimalsNum));
+    const facilitatorBalanceNum = parseFloat(ethers.formatUnits(facilitatorBalance, decimalsNum));
+    const soldSupply = totalSupplyNum - facilitatorBalanceNum;
+
+    // Calculate Cost
+    const costETH = calculateBuyCost(soldSupply, amountNum);
+    const currentPrice = getCurrentPrice(soldSupply + amountNum);
+
+    console.log(`Buy Request:
+      User: ${walletAddress}
+      Amount: ${amountNum}
+      Sold Supply: ${soldSupply}
+      Cost: ${costETH.toFixed(6)} ETH
+      New Price: ${currentPrice.toFixed(6)} ETH
+    `);
+
+    const tokenAmount = ethers.parseUnits(amount, decimalsNum);
 
     // Check if we have enough tokens to sell
-    const balance = await tokenContract.balanceOf(wallet.address);
-    if (balance < tokenAmount) {
+    if (facilitatorBalance < tokenAmount) {
       return NextResponse.json(
-        { success: false, message: 'Insufficient token balance in treasury' },
+        { success: false, message: 'Insufficient liquidity in bonding curve' },
         { status: 400 }
       );
     }
@@ -62,9 +86,11 @@ async function handleBuyRequest(request: NextRequest): Promise<NextResponse> {
 
     return NextResponse.json({
       success: true,
-      message: `Successfully purchased ${amount} tokens`,
+      message: `Successfully purchased ${amount} tokens for ${costETH.toFixed(6)} ETH (Simulated)`,
       txHash: receipt.hash,
       amount: amount,
+      costETH: costETH.toFixed(6),
+      newPrice: currentPrice.toFixed(6)
     });
   } catch (error) {
     console.error('Error in buy handler:', error);
