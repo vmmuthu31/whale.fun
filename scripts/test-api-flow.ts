@@ -10,7 +10,7 @@ dotenv.config({ path: path.resolve(__dirname, '../.env') });
 const BASE_URL = 'http://localhost:3000';
 const RECEIVER_ADDRESS = process.env.RECEIVER_WALLET_ADDRESS || '';
 const TOKEN_ADDRESS = process.env.TOKEN_ADDRESS || '0x71A682D8029d031EB57Ba6BB02d3B37D486fffA4'; // Fee token
-const CHAIN_ID = parseInt(process.env.CHAIN_ID || '16600');
+const CHAIN_ID = parseInt(process.env.CHAIN_ID || '16602');
 
 // Generate a random user wallet
 const userWallet = ethers.Wallet.createRandom();
@@ -123,17 +123,12 @@ async function testBuy(tokenAddress: string) {
   const data = await response.json();
   console.log('Status:', response.status);
   console.log('Response:', data);
+
 }
 
 async function testSell(tokenAddress: string) {
   console.log('\n--- Testing Sell ---');
   const proof = await generateProof('0.01'); // 0.01 fee for sell
-  
-  // For sell, we need authorization. 
-  // Since we can't easily sign EIP-3009 without the contract deployed and accessible via provider in this script (or mocking it),
-  // we will just send the request and expect it to ask for authorization.
-  // Or we can try to mock the auth param if the API doesn't validate it on-chain immediately (it does try to execute).
-  // So we expect a 400 with "Authorization required" or similar if we don't provide it.
   
   const response = await fetch(`${BASE_URL}/api/x402/sell`, {
     method: 'POST',
@@ -145,13 +140,81 @@ async function testSell(tokenAddress: string) {
       walletAddress: userWallet.address,
       amount: '50',
       tokenAddress: tokenAddress,
-      // No authorization provided initially
     }),
   });
 
   const data = await response.json();
   console.log('Status:', response.status);
   console.log('Response:', data);
+
+  if (data.requiresAuthorization) {
+      console.log('\n--- Signing Authorization ---');
+      const params = data.authorizationParams;
+      
+      // EIP-712 Domain
+      const domain = {
+        name: 'Test Token',
+        version: '1',
+        chainId: CHAIN_ID,
+        verifyingContract: tokenAddress
+      };
+
+      const types = {
+        TransferWithAuthorization: [
+          { name: 'from', type: 'address' },
+          { name: 'to', type: 'address' },
+          { name: 'value', type: 'uint256' },
+          { name: 'validAfter', type: 'uint256' },
+          { name: 'validBefore', type: 'uint256' },
+          { name: 'nonce', type: 'bytes32' }
+        ]
+      };
+
+      // Generate a random nonce for the auth
+      const authNonce = ethers.hexlify(ethers.randomBytes(32));
+      const validAfter = Math.floor(Date.now() / 1000);
+      const validBefore = validAfter + 3600;
+
+      const message = {
+        from: params.from,
+        to: params.to,
+        value: params.value,
+        validAfter,
+        validBefore,
+        nonce: authNonce
+      };
+
+      console.log('Signing message:', message);
+      const signature = await userWallet.signTypedData(domain, types, message);
+      const sig = ethers.Signature.from(signature);
+
+      console.log('\n--- Resending Sell with Authorization ---');
+      const proof = await generateProof('0.01');
+      
+      const authResponse = await fetch(`${BASE_URL}/api/x402/sell`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-402-proof': proof,
+        },
+        body: JSON.stringify({
+          walletAddress: userWallet.address,
+          amount: '50',
+          tokenAddress: tokenAddress,
+          chainId: CHAIN_ID,
+          authorization: {
+            ...message,
+            v: sig.v,
+            r: sig.r,
+            s: sig.s
+          }
+        }),
+      });
+
+      const authData = await authResponse.json();
+      console.log('Auth Status:', authResponse.status);
+      console.log('Auth Response:', authData);
+  }
 }
 
 async function main() {
