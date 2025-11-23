@@ -91,7 +91,7 @@ async function main() {
 
   const fundPerWalletWei = process.env.FUND_PER_WALLET_WEI
     ? BigInt(process.env.FUND_PER_WALLET_WEI)
-    : 0n;
+    : BigInt(0);
 
   // Clients
   const chain = network === "localhost" ? hardhatLocal : zeroGTestnet;
@@ -168,7 +168,7 @@ async function main() {
   );
 
   // Funding step
-  if (fundPerWalletWei > 0n && !simulate) {
+  if (fundPerWalletWei > BigInt(0) && !simulate) {
     console.log(
       `[roundrobin] Funding secondary wallets with ${fundPerWalletWei} wei each...`
     );

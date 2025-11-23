@@ -139,7 +139,7 @@ async function main() {
   }
 
   // Step 1: Deploy X402Token (implementation)
-  const initialSupply = 1000000n * 10n ** 18n; // 1M tokens with 18 decimals
+  const initialSupply = BigInt(1000000) * BigInt(10) ** BigInt(18); // 1M tokens with 18 decimals
   const defaultImageUrl =
     "https://purple-voluntary-minnow-145.mypinata.cloud/ipfs/bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi";
   const x402Token = await deployContract("X402Token", [

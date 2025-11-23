@@ -426,28 +426,28 @@ async function main() {
     const totalSupply = stats[0];
     const totalSold = stats[1];
     const currentPrice = stats[2];
-    const remaining = totalSupply > totalSold ? totalSupply - totalSold : 0n;
+    const remaining =
+      totalSupply > totalSold ? totalSupply - totalSold : BigInt(0);
 
-    if (remaining === 0n || currentPrice === BigInt(0)) return null;
+    if (remaining === BigInt(0) || currentPrice === BigInt(0)) return null;
 
     // Rough estimate: budget / price (in 1e18 precision)
-    let estimate = (ethBudget * 10n ** 18n) / currentPrice;
-    if (estimate <= BigInt(0)) estimate = 1n;
-
+    let estimate = (ethBudget * BigInt(10) ** BigInt(18)) / currentPrice;
+    if (estimate <= BigInt(0)) estimate = BigInt(1);
     // Hard cap max tokens per buy to avoid heavy curve evals on RPC
     const MAX_TOKENS_PER_BUY = parseUnits("2", 18); // 2 tokens max per buy
     // Give some headroom but clamp to remaining and cap
-    let hi = estimate * 2n;
+    let hi = estimate * BigInt(2);
     if (hi > remaining) hi = remaining;
     if (hi > MAX_TOKENS_PER_BUY) hi = MAX_TOKENS_PER_BUY;
-    if (hi <= BigInt(0)) hi = 1n;
+    if (hi <= BigInt(0)) hi = BigInt(1);
 
     // Binary search between [1, hi]
-    let lo = 1n;
+    let lo = BigInt(1);
     let best: { tokenAmount: bigint; cost: bigint } | null = null;
     let oogCount = 0;
     for (let i = 0; i < 32 && lo <= hi; i++) {
-      const mid = (lo + hi) / 2n;
+      const mid = (lo + hi) / BigInt(2);
       let cost: bigint | null = null;
       try {
         cost = (await publicClient.readContract({
@@ -466,24 +466,27 @@ async function main() {
               address: token,
               abi: ctArtifact.abi,
               functionName: "calculateBuyCost",
-              args: [1n * 10n ** 18n],
+              args: [BigInt(1) * BigInt(10) ** BigInt(18)],
             })) as bigint;
             if (oneCost <= ethBudget)
-              return { tokenAmount: 1n * 10n ** 18n, cost: oneCost };
+              return {
+                tokenAmount: BigInt(1) * BigInt(10) ** BigInt(18),
+                cost: oneCost,
+              };
             return null; // even 1 token exceeds budget
           } catch {
             return null;
           }
         }
-        hi = mid - 1n;
+        hi = mid - BigInt(1);
         continue;
       }
       if (cost <= ethBudget) {
         best = { tokenAmount: mid, cost };
-        lo = mid + 1n;
+        lo = mid + BigInt(1);
       } else {
         if (mid === BigInt(0)) break;
-        hi = mid - 1n;
+        hi = mid - BigInt(1);
       }
     }
     // Final check: ensure best within budget; otherwise, try 1 token
@@ -493,10 +496,13 @@ async function main() {
           address: token,
           abi: ctArtifact.abi,
           functionName: "calculateBuyCost",
-          args: [1n * 10n ** 18n],
+          args: [BigInt(1) * BigInt(10) ** BigInt(18)],
         })) as bigint;
         if (oneCost <= ethBudget)
-          return { tokenAmount: 1n * 10n ** 18n, cost: oneCost };
+          return {
+            tokenAmount: BigInt(1) * BigInt(10) ** BigInt(18),
+            cost: oneCost,
+          };
       } catch {}
     }
     return best;
@@ -523,9 +529,9 @@ async function main() {
       })) as bigint;
       if (proceed <= ethTarget) {
         best = { tokenAmount: mid, proceed };
-        lo = mid + 1n;
+        lo = mid + BigInt(1);
       } else {
-        hi = mid - 1n;
+        hi = mid - BigInt(1);
       }
       if (lo > hi) break;
     }
