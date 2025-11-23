@@ -19,11 +19,11 @@ const RPC_URL = process.env.RPC_URL || '';
 async function handleBuyRequest(request: NextRequest): Promise<NextResponse> {
   try {
     const body = await request.json();
-    const { walletAddress, amount } = body;
+    const { walletAddress, amount, tokenAddress } = body;
 
-    if (!walletAddress || !amount) {
+    if (!walletAddress || !amount || !tokenAddress) {
       return NextResponse.json(
-        { success: false, message: 'Missing walletAddress or amount' },
+        { success: false, message: 'Missing walletAddress, amount, or tokenAddress' },
         { status: 400 }
       );
     }
@@ -40,7 +40,7 @@ async function handleBuyRequest(request: NextRequest): Promise<NextResponse> {
     // Setup provider and signer
     const provider = new ethers.JsonRpcProvider(RPC_URL);
     const wallet = new ethers.Wallet(PRIVATE_KEY, provider);
-    const tokenContract = new ethers.Contract(TOKEN_ADDRESS, TOKEN_ABI, wallet);
+    const tokenContract = new ethers.Contract(tokenAddress, TOKEN_ABI, wallet);
 
     // Get token decimals
     const decimals = await tokenContract.decimals();

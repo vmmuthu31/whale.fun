@@ -91,11 +91,18 @@ async function logSignatureData(
 async function handleSellRequest(request: NextRequest): Promise<NextResponse> {
   try {
     const body = await request.json();
-    const { walletAddress, amount, authorization, chainId } = body;
+    const { walletAddress, amount, authorization, chainId, tokenAddress } = body;
+
+    if (!tokenAddress) {
+      return NextResponse.json(
+        { success: false, message: 'Missing tokenAddress' },
+        { status: 400 }
+      );
+    }
 
     // Get token decimals and calculate token amount
     const provider = new ethers.JsonRpcProvider(RPC_URL);
-    const tokenContract = new ethers.Contract(TOKEN_ADDRESS, TOKEN_ABI, provider);
+    const tokenContract = new ethers.Contract(tokenAddress, TOKEN_ABI, provider);
     const decimals = Number(await tokenContract.decimals());
     
     // Parse the amount with the correct number of decimals
@@ -151,7 +158,7 @@ async function handleSellRequest(request: NextRequest): Promise<NextResponse> {
       // Create a provider and signer
       const provider = new ethers.JsonRpcProvider(RPC_URL);
       const signer = new ethers.Wallet(process.env.PRIVATE_KEY || '', provider);
-      const tokenContract = new ethers.Contract(TOKEN_ADDRESS, TOKEN_ABI, signer);
+      const tokenContract = new ethers.Contract(tokenAddress, TOKEN_ABI, signer);
       
       try {
         console.log('Transfer parameters:', {
@@ -405,7 +412,7 @@ async function handleSellRequest(request: NextRequest): Promise<NextResponse> {
             from: walletAddress,
             to: RECEIVER_ADDRESS,
             value: tokenAmount.toString(),
-            tokenAddress: TOKEN_ADDRESS,
+            tokenAddress: tokenAddress,
           },
         },
         { status: 400 }
