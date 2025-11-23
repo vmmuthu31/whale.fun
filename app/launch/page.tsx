@@ -3,7 +3,8 @@ import Header from "@/components/layout/Header";
 import { useState, useEffect } from "react";
 import type { FC, ChangeEvent, FormEvent } from "react";
 import { tokenFactoryRootService } from "@/lib/services/TokenFactoryRootService";
-import { parseEther, formatEther } from "ethers";
+import { parseEther, formatEther, Contract, BrowserProvider } from "ethers";
+import X402TokenFactoryABI from "@/config/abi/X402TokenFactory.json";
 import {
   getBlockchainConnection,
   validateNetwork,
@@ -235,6 +236,7 @@ const PreviewCard: FC<{
 };
 
 const CreatePage: FC = () => {
+  const [tokenType, setTokenType] = useState<'standard' | 'x402'>('standard');
   const [formData, setFormData] = useState({
     tokenName: "",
     tokenSymbol: "",
@@ -248,6 +250,9 @@ const CreatePage: FC = () => {
     twitter: "",
     logoPreview: "",
     logoFile: null as File | null,
+    // X402 specific fields
+    initialPrice: "0.01",
+    maxSupply: "10000000",
   });
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<string | null>(null);
@@ -340,8 +345,89 @@ const CreatePage: FC = () => {
       logoPreview: "",
       logoFile: null,
       logoUrl: "",
+      initialPrice: "0.01",
+      maxSupply: "10000000"
     }));
     setUploadStatus(null);
+  };
+
+  // Contract addresses
+  const X402_FACTORY_ADDRESS = "0xe87ab02994a53e01ff5718fb938fa001d7306d22";
+
+  const createToken = async () => {
+    if (!address) throw new Error("No connected wallet");
+    
+    const provider = new BrowserProvider(window.ethereum);
+    const signer = await provider.getSigner();
+
+    if (tokenType === 'standard') {
+      // Standard token creation logic
+      const tx = await tokenFactoryRootService.createToken({
+        name: formData.tokenName,
+        symbol: formData.tokenSymbol,
+        totalSupply: parseEther(formData.totalSupply),
+        targetMarketCap: parseEther(formData.targetMarketCap || "0"),
+        creatorFeePercent: formData.creatorFeeBps ? 
+          BigInt(parseInt(formData.creatorFeeBps, 10)) / BigInt(100) : 
+          BigInt(0),
+        description: formData.description || "",
+        logoUrl: formData.logoUrl || "",
+      });
+      return tx.wait();
+    } else {
+      // X402 token creation
+      const x402Factory = new Contract(
+        X402_FACTORY_ADDRESS,
+        X402TokenFactoryABI.abi,
+        signer
+      );
+      
+      // Ensure we have all required parameters
+      if (!formData.tokenName || !formData.tokenSymbol || !formData.totalSupply) {
+        throw new Error("Missing required token parameters");
+      }
+
+      const decimals = 18;
+      const initialSupply = parseEther(formData.totalSupply);
+      const imageUrl = formData.logoUrl || ""; // Fallback to empty string if no logo URL
+      
+      console.log("Creating X402 token with params:", {
+        name: formData.tokenName,
+        symbol: formData.tokenSymbol,
+        decimals,
+        initialSupply: initialSupply.toString(),
+        owner: address,
+        imageUrl
+      });
+
+      try {
+        // Call the createToken function with all required parameters
+        const tx = await x402Factory.createToken(
+          formData.tokenName,    // string name
+          formData.tokenSymbol,  // string symbol
+          decimals,              // uint8 decimals
+          initialSupply,         // uint256 initialSupply
+          address,               // address owner
+          imageUrl               // string imageUrl
+        );
+        
+        const receipt = await tx.wait();
+        console.log("Token created successfully:", receipt);
+        return receipt;
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        const errorDetails = error && typeof error === 'object' 
+          ? {
+              data: 'data' in error ? error.data : undefined,
+              reason: 'reason' in error ? error.reason : undefined,
+              code: 'code' in error ? error.code : undefined
+            }
+          : {};
+          
+        console.error("X402 Token creation error:", errorMessage, errorDetails);
+        throw new Error(`Token creation failed: ${errorMessage}`);
+      }
+    }
   };
 
   const handleSubmit = async (e: FormEvent) => {
@@ -379,9 +465,18 @@ const CreatePage: FC = () => {
       }
 
       try {
-        console.log("Attempting to call getFactoryStats...");
-        const factoryStats = await tokenFactoryRootService.getFactoryStats();
-        console.log("✅ Factory stats:", factoryStats);
+        const receipt = await createToken();
+        
+        const tokenAddress = receipt.logs[0]?.address || receipt.events?.[0]?.address;
+        
+        if (!tokenAddress) {
+          throw new Error("Failed to get token address from transaction receipt");
+        }
+
+        setCreatedTokenAddress(tokenAddress);
+        setSuccess(`${tokenType.toUpperCase()} token created successfully!`);
+        setIsTokenCreated(true);
+        setCurrentStep(3); // Move to success step
       } catch (contractError: any) {
         console.error("❌ Contract check failed:", contractError);
         console.error("Error details:", {
@@ -783,6 +878,8 @@ const CreatePage: FC = () => {
             twitter: "",
             logoPreview: "",
             logoFile: null,
+            initialPrice: "0.01",
+            maxSupply: "10000000"
           });
           setCurrentStep(1);
         }}
@@ -833,7 +930,32 @@ const CreatePage: FC = () => {
                           total={totalSteps}
                         />
 
-                        <div className="min-h-[26rem] sm:min-h-[28rem] flex flex-col">
+                        {/* Token Type Selection */}
+                        {currentStep === 1 && (
+                          <div className="mt-6 space-y-4">
+                            <div>
+                              <label htmlFor="tokenType" className="block text-sm font-medium text-gray-700 mb-2">
+                                Token Standard
+                              </label>
+                              <div>
+                                <select
+                                  id="tokenType"
+                                  value={tokenType}
+                                  onChange={(e) => setTokenType(e.target.value as 'standard' | 'x402')}
+                                  className="appearance-none block w-full pl-3 pr-8 py-2.5 text-base border border-gray-300 focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-purple-500 sm:text-sm rounded-md bg-white bg-no-repeat bg-[right_0.7rem_top_50%] bg-[length:0.65em]"
+                                  style={{
+                                    backgroundImage: 'url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23999%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E")'
+                                  }}
+                                >
+                                  <option value="standard">Standard Token</option>
+                                  <option value="x402">X402 Token</option>
+                                </select>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="min-h-[26rem] mt-6 sm:min-h-[28rem] flex flex-col">
                           {currentStep === 1 && (
                             <div className="space-y-5">
                               <div className="border-2 border-dashed border-gray-300 rounded-xl bg-black/5">
@@ -1042,6 +1164,8 @@ const CreatePage: FC = () => {
                       twitter: "",
                       logoPreview: "",
                       logoFile: null,
+                      initialPrice: "0.01",
+                      maxSupply: "10000000"
                     });
                     setError(null);
                     setSuccess(null);

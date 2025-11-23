@@ -88,14 +88,24 @@ async function logSignatureData(
   }
 }
 
+import { calculateSellRefund, getCurrentPrice } from '@/lib/bonding-curve';
+
 async function handleSellRequest(request: NextRequest): Promise<NextResponse> {
   try {
     const body = await request.json();
-    const { walletAddress, amount, authorization, chainId } = body;
+    const { walletAddress, amount, authorization, chainId, tokenAddress } = body;
+
+    if (!tokenAddress) {
+      return NextResponse.json(
+        { success: false, message: 'Missing tokenAddress' },
+        { status: 400 }
+      );
+    }
 
     // Get token decimals and calculate token amount
     const provider = new ethers.JsonRpcProvider(RPC_URL);
-    const tokenContract = new ethers.Contract(TOKEN_ADDRESS, TOKEN_ABI, provider);
+    const wallet = new ethers.Wallet(process.env.PRIVATE_KEY || '', provider); // Facilitator wallet
+    const tokenContract = new ethers.Contract(tokenAddress, TOKEN_ABI, wallet); // Use wallet to sign if needed, but here we just read first
     const decimals = Number(await tokenContract.decimals());
     
     // Parse the amount with the correct number of decimals
@@ -119,15 +129,28 @@ async function handleSellRequest(request: NextRequest): Promise<NextResponse> {
     const userBalanceFormatted = formatUnits(userBalance, decimals);
     const tokenAmountFormatted = formatUnits(tokenAmount, decimals);
     
-    console.log({
-      userAddress: walletAddress,
-      userBalance: userBalance.toString(),
-      userBalanceFormatted,
-      tokenAmount: tokenAmount.toString(),
-      tokenAmountFormatted,
-      decimals
-    });
+    // Bonding Curve Calculations
+    const [totalSupply, facilitatorBalance] = await Promise.all([
+        tokenContract.totalSupply(),
+        tokenContract.balanceOf(wallet.address)
+    ]);
     
+    const amountNum = parseFloat(amount);
+    const totalSupplyNum = parseFloat(ethers.formatUnits(totalSupply, decimals));
+    const facilitatorBalanceNum = parseFloat(ethers.formatUnits(facilitatorBalance, decimals));
+    const soldSupply = totalSupplyNum - facilitatorBalanceNum;
+    
+    const refundETH = calculateSellRefund(soldSupply, amountNum);
+    const currentPrice = getCurrentPrice(soldSupply - amountNum);
+    
+    console.log(`Sell Request:
+        User: ${walletAddress}
+        Amount: ${amountNum}
+        Sold Supply: ${soldSupply}
+        Refund: ${refundETH.toFixed(6)} ETH
+        New Price: ${currentPrice.toFixed(6)} ETH
+    `);
+
     // Check if user has sufficient balance
     if (userBalanceBN < tokenAmountBN) {
       return NextResponse.json(
@@ -151,12 +174,12 @@ async function handleSellRequest(request: NextRequest): Promise<NextResponse> {
       // Create a provider and signer
       const provider = new ethers.JsonRpcProvider(RPC_URL);
       const signer = new ethers.Wallet(process.env.PRIVATE_KEY || '', provider);
-      const tokenContract = new ethers.Contract(TOKEN_ADDRESS, TOKEN_ABI, signer);
+      const tokenContract = new ethers.Contract(tokenAddress, TOKEN_ABI, signer);
       
       try {
         console.log('Transfer parameters:', {
           from: walletAddress,
-          to: RECEIVER_ADDRESS,
+          to: wallet.address,
           value: tokenAmount.toString(),
           validAfter,
           validBefore,
@@ -179,7 +202,7 @@ async function handleSellRequest(request: NextRequest): Promise<NextResponse> {
           s: formattedS,
           nonce: nonce,
           from: walletAddress,
-          to: RECEIVER_ADDRESS,
+          to: wallet.address,
           value: tokenAmount.toString(),
           validAfter,
           validBefore
@@ -200,7 +223,7 @@ async function handleSellRequest(request: NextRequest): Promise<NextResponse> {
         // Log the full call data for debugging
         const callData = tokenContract.interface.encodeFunctionData('transferWithAuthorization', [
           walletAddress,
-          RECEIVER_ADDRESS,
+          wallet.address,
           tokenAmount,
           validAfter,
           validBefore,
@@ -218,7 +241,7 @@ async function handleSellRequest(request: NextRequest): Promise<NextResponse> {
         try {
           console.log('=== TransferWithAuthorization Debug ===');
           console.log('Wallet Address:', walletAddress);
-          console.log('Receiver Address:', RECEIVER_ADDRESS);
+          console.log('Receiver Address:', wallet.address);
           console.log('Token Amount:', tokenAmount.toString());
           console.log('Valid After:', validAfter);
           console.log('Valid Before:', validBefore);
@@ -231,7 +254,7 @@ async function handleSellRequest(request: NextRequest): Promise<NextResponse> {
           const signatureData = await logSignatureData(
             tokenContract,
             walletAddress,
-            RECEIVER_ADDRESS,
+            wallet.address,
             tokenAmount,
             validAfter,
             validBefore,
@@ -245,7 +268,7 @@ async function handleSellRequest(request: NextRequest): Promise<NextResponse> {
           console.log('Attempting transferWithAuthorization with separate v, r, s parameters');
           const tx = await tokenContract.transferWithAuthorization(
             walletAddress, // from
-            RECEIVER_ADDRESS, // to
+            wallet.address, // to (Facilitator)
             tokenAmount, // value (in wei)
             validAfter,
             validBefore,
@@ -292,7 +315,7 @@ async function handleSellRequest(request: NextRequest): Promise<NextResponse> {
             // Try with the packed signature as the last parameter
             const tx = await tokenContract.transferWithAuthorization(
               walletAddress,
-              RECEIVER_ADDRESS,
+              wallet.address,
               tokenAmount,
               validAfter,
               validBefore,
@@ -327,7 +350,7 @@ async function handleSellRequest(request: NextRequest): Promise<NextResponse> {
               // In your route.ts file, update the transferWithAuthorization call to match the contract's ABI:
                 const tx = await tokenContract.transferWithAuthorization(
                     walletAddress,         // from
-                    RECEIVER_ADDRESS,      // to
+                    wallet.address,      // to
                     tokenAmount,           // value
                     validAfter,            // validAfter
                     validBefore,           // validBefore
@@ -403,9 +426,9 @@ async function handleSellRequest(request: NextRequest): Promise<NextResponse> {
           requiresAuthorization: true,
           authorizationParams: {
             from: walletAddress,
-            to: RECEIVER_ADDRESS,
+            to: wallet.address, // Facilitator address
             value: tokenAmount.toString(),
-            tokenAddress: TOKEN_ADDRESS,
+            tokenAddress: tokenAddress,
           },
         },
         { status: 400 }
