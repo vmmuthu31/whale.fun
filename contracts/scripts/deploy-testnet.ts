@@ -49,7 +49,7 @@ async function main() {
   const balance = await publicClient.getBalance({ address: account.address });
   console.log(`Balance: ${parseFloat((Number(balance) / 1e18).toFixed(4))} A0GI`);
   
-  if (balance === 0n) {
+  if (balance === BigInt(0)) {
     throw new Error("Insufficient balance. Please fund your account with testnet tokens.");
   }
   

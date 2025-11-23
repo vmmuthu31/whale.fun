@@ -156,6 +156,6 @@ export class X402Client {
 
 // Helper function to get x402 client instance
 export function getX402Client(): X402Client {
-  const facilitatorUrl = process.env.NEXT_PUBLIC_X402_FACILITATOR_URL || 'http://localhost:3001';
-  return new X402Client(facilitatorUrl);
+  // Use empty string for relative paths (internal API)
+  return new X402Client('');
 }
