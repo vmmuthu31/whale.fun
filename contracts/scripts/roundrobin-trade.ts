@@ -16,7 +16,6 @@ import { privateKeyToAccount } from "viem/accounts";
 
 dotenv.config();
 
-// Curated mock token profiles for nicer demo names & metadata
 const MOCK_PROFILES = [
   {
     name: "Aqua Orca",
