@@ -65,11 +65,9 @@ async function main() {
     );
   }
 
-  // Load compiled contracts
   const __dirname = path.dirname(fileURLToPath(import.meta.url));
   const artifactsPath = path.join(__dirname, "../artifacts/contracts");
 
-  // Helper function to deploy a contract
   async function deployContract(
     name: string,
     constructorArgs: any[] = [],
