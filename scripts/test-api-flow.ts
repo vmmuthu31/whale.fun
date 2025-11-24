@@ -12,21 +12,26 @@ const RECEIVER_ADDRESS = process.env.RECEIVER_WALLET_ADDRESS || '';
 const TOKEN_ADDRESS = process.env.TOKEN_ADDRESS || '0x71A682D8029d031EB57Ba6BB02d3B37D486fffA4'; // Fee token
 const CHAIN_ID = parseInt(process.env.CHAIN_ID || '16602');
 
-// Generate a random user wallet
-const userWallet = ethers.Wallet.createRandom();
-console.log('User Wallet:', userWallet.address);
+// Use funded test wallet
+const TEST_PRIVATE_KEY = process.env.TEST_PRIVATE_KEY || '';
+if (!TEST_PRIVATE_KEY) {
+  console.error('TEST_PRIVATE_KEY not found in .env');
+  process.exit(1);
+}
+const userWallet = new ethers.Wallet(TEST_PRIVATE_KEY);
+console.log('Test User Wallet:', userWallet.address);
 
 async function generateProof(amount: string) {
   const validAfter = Math.floor(Date.now() / 1000) - 60;
   const validBefore = Math.floor(Date.now() / 1000) + 3600;
   const nonce = ethers.hexlify(ethers.randomBytes(32));
 
-  // Message construction matches middleware
+  // For native token fees, sign a simple message proving intent to pay
   const message = ethers.solidityPackedKeccak256(
     ['address', 'address', 'uint256', 'uint256', 'uint256', 'bytes32'],
     [
-      RECEIVER_ADDRESS,
-      TOKEN_ADDRESS,
+      userWallet.address, // from
+      RECEIVER_ADDRESS,   // to
       ethers.parseUnits(amount, 18),
       validAfter,
       validBefore,
@@ -41,6 +46,7 @@ async function generateProof(amount: string) {
     nonce,
     validAfter: validAfter.toString(),
     validBefore: validBefore.toString(),
+    from: userWallet.address,
   });
 }
 
